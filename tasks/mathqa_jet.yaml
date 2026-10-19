@@ -1,0 +1,20 @@
+# The harness's built-in mathqa task (lm_eval 0.4.5), reading the jet-ai/math_qa copy of the dataset
+# because the original dataset depends on a loading script.
+task: mathqa_jet
+dataset_path: jet-ai/math_qa
+output_type: multiple_choice
+training_split: train
+validation_split: validation
+test_split: test
+doc_to_text: "Question: {{Problem}}\nAnswer:"
+doc_to_target: "{{['a', 'b', 'c', 'd', 'e'].index(correct)}}"
+doc_to_choice: !function utils.doc_to_choice
+metric_list:
+  - metric: acc
+    aggregation: mean
+    higher_is_better: true
+  - metric: acc_norm
+    aggregation: mean
+    higher_is_better: true
+metadata:
+  version: 1.0

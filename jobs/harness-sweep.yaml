@@ -1,0 +1,87 @@
+# lm-evaluation-harness on the 22 controlled sweep models (registry group "sweep"), one GPU per model, plus the
+# next-token logits for every harness prompt.
+# Output: /output/harness/<setting>/<model>/ on the cache-4t-rwm PVC (see run_harness.py).
+# The scripts come from the ConfigMaps slm-pipeline and slm-pipeline-tasks (see README).
+#   kubectl apply -f harness-main.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kimia-slm-harness-sweep
+spec:
+  completionMode: Indexed
+  completions: 22
+  parallelism: 8
+  backoffLimit: 20
+  template:
+    metadata:
+      labels:
+        app: gpu-app
+    spec:
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                - NVIDIA-A10
+                - NVIDIA-GeForce-RTX-3090
+                - NVIDIA-GeForce-RTX-4090
+                - NVIDIA-L4
+                - NVIDIA-L40
+                - NVIDIA-L40S
+                - NVIDIA-RTX-A6000
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                - hcc-nrp-shor-c5925.unl.edu   # GPU occupied by a stale process
+                - nautilus-ext-gpu01.fullerton.edu   # CUDA launch failures, rejects pods
+                - ren-gp-argo-01.madren.org   # volume reads stalled
+      containers:
+      - name: harness
+        image: pytorch/pytorch:2.4.1-cuda12.1-cudnn9-runtime
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            pip install --upgrade pip && \
+            pip install hf_transfer huggingface_hub "lm_eval==0.4.5" && \
+            pip install "datasets==3.1.0" "numpy<2" "pyarrow==17.0.0" "transformers==4.46.3" "accelerate==1.1.1" "compressed-tensors==0.10.2" "peft==0.13.2" "bitsandbytes==0.44.1" "hqq==0.2.2" && \
+            export HF_HOME=/output/hf-cache HF_DATASETS_TRUST_REMOTE_CODE=1 && \
+            cd /opt/repo/slms/Pipeline && \
+            python3 run_harness.py --group sweep --setting zeroshot --logits --tasks-dir /opt/tasks --out /output/harness
+        env:
+          - name: HF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: hf-token-secret
+                key: token
+          - name: HF_HUB_ENABLE_HF_TRANSFER
+            value: "1"
+        volumeMounts:
+          - name: pipeline-code
+            mountPath: /opt/repo/slms/Pipeline
+          - name: pipeline-tasks
+            mountPath: /opt/tasks
+          - name: plot-output
+            mountPath: /output
+        resources:
+          limits:
+            memory: 32Gi
+            cpu: "4"
+            nvidia.com/gpu: "1"
+          requests:
+            memory: 32Gi
+            cpu: "4"
+            nvidia.com/gpu: "1"
+      volumes:
+        - name: pipeline-code
+          configMap:
+            name: slm-pipeline
+        - name: pipeline-tasks
+          configMap:
+            name: slm-pipeline-tasks
+        - name: plot-output
+          persistentVolumeClaim:
+            claimName: cache-4t-rwm

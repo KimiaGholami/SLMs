@@ -1,0 +1,85 @@
+# Saves the benchmark logits of the 9 float32 models (registry.py, loader "full"), one GPU each. On a 48 GB or 32 GB GPU the model
+# fits entirely; on a 24 GB GPU part of it stays in CPU memory (slower, same results). 2-GPU pods rarely get scheduled.
+# Output: /output/slm-logits/<model>/<benchmark>/{logits.npy,meta.json} on the cache-4t-rwm PVC.
+# The scripts come from the slm-pipeline ConfigMap (see README).
+# A failed or evicted index can simply rerun: finished benchmarks are skipped, unfinished ones resume.
+#   kubectl apply -f extract-full.yaml
+#   kubectl get pods -l job-name=kimia-slm-extract-full
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kimia-slm-extract-full
+spec:
+  completionMode: Indexed
+  completions: 9
+  parallelism: 9
+  backoffLimit: 20
+  template:
+    metadata:
+      labels:
+        app: gpu-app
+    spec:
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                - NVIDIA-L40
+                - NVIDIA-L40S
+                - NVIDIA-RTX-A6000
+                - Tesla-V100-SXM2-32GB
+                - NVIDIA-A10
+                - NVIDIA-GeForce-RTX-3090
+                - NVIDIA-GeForce-RTX-4090
+                - NVIDIA-L4
+                - NVIDIA-TITAN-RTX
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                - hcc-nrp-shor-c5925.unl.edu   # GPU occupied by a stale process
+                - nautilus-ext-gpu01.fullerton.edu   # CUDA launch failures, rejects pods
+      containers:
+      - name: extract
+        image: pytorch/pytorch:2.4.1-cuda12.1-cudnn9-runtime
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            pip install --upgrade pip && \
+            pip install hf_transfer huggingface_hub "datasets==3.1.0" "numpy<2" && \
+            pip install "transformers==4.46.3" "accelerate==1.1.1" "compressed-tensors==0.10.2" "peft==0.13.2" "bitsandbytes==0.44.1" && \
+            export HF_HOME=/output/hf-cache && \
+            cd /opt/repo/slms/Pipeline && \
+            python3 extract_logits.py --group full --out /output/slm-logits
+        env:
+          - name: HF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: hf-token-secret
+                key: token
+          - name: HF_HUB_ENABLE_HF_TRANSFER
+            value: "1"
+        volumeMounts:
+          - name: pipeline-code
+            mountPath: /opt/repo/slms/Pipeline
+          - name: plot-output
+            mountPath: /output
+        resources:
+          limits:
+            memory: 32Gi
+            cpu: "4"
+            nvidia.com/gpu: "1"
+          requests:
+            memory: 32Gi
+            cpu: "4"
+            nvidia.com/gpu: "1"
+      volumes:
+        - name: pipeline-code
+          configMap:
+            name: slm-pipeline
+        - name: plot-output
+          persistentVolumeClaim:
+            claimName: cache-4t-rwm

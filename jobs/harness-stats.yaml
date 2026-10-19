@@ -1,0 +1,41 @@
+# Statistics for the harness runs (CPU only); see harness_stats.py.
+# Output: /output/harness/stats-zeroshot/{stats.json,cosine.npz,per_question.npz}.
+#   kubectl apply -f harness-stats.yaml
+#   kubectl logs -f job/kimia-slm-harness-stats
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kimia-slm-harness-stats
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: stats
+        image: python:3.11-slim
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            pip install "numpy<2" && \
+            cd /opt/repo/slms/Pipeline && \
+            python3 harness_stats.py --harness /output/harness --setting zeroshot --out /output/harness/stats-zeroshot --workers 6
+        volumeMounts:
+          - name: pipeline-code
+            mountPath: /opt/repo/slms/Pipeline
+          - name: plot-output
+            mountPath: /output
+        resources:
+          limits:
+            memory: 48Gi
+            cpu: "8"
+          requests:
+            memory: 48Gi
+            cpu: "8"
+      volumes:
+        - name: pipeline-code
+          configMap:
+            name: slm-pipeline
+        - name: plot-output
+          persistentVolumeClaim:
+            claimName: cache-4t-rwm

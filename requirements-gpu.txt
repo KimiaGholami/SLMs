@@ -1,0 +1,14 @@
+# GPU steps: extract_logits.py and run_harness.py (versions used in the paper)
+# Base image: pytorch/pytorch:2.4.1-cuda12.1-cudnn9-runtime (PyTorch 2.4.1, CUDA 12.1)
+lm_eval==0.4.5
+datasets==3.1.0
+numpy<2
+pyarrow==17.0.0
+transformers==4.46.3
+accelerate==1.1.1
+compressed-tensors==0.10.2
+peft==0.13.2
+bitsandbytes==0.44.1
+hqq==0.2.2
+huggingface_hub
+hf_transfer

@@ -1,0 +1,3 @@
+# Laptop / CPU steps: compute_stats.py, per_question.py, harness_stats.py, analyze.py, make_figures.py
+numpy<2
+matplotlib>=3.8

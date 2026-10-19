@@ -1,0 +1,17 @@
+# GSM8K-MC (Zhang et al., 2024) in the harness's MMLU format: lettered options, scored by the
+# log-likelihood of the answer letter.
+task: gsm8k_mc
+dataset_path: XiangPan/gsm8k-mc
+output_type: multiple_choice
+training_split: train
+test_split: test
+fewshot_split: train
+doc_to_text: "{{question.strip()}}\nA. {{A}}\nB. {{B}}\nC. {{C}}\nD. {{D}}\nAnswer:"
+doc_to_choice: ["A", "B", "C", "D"]
+doc_to_target: "{{['A', 'B', 'C', 'D'].index(Answer)}}"
+metric_list:
+  - metric: acc
+    aggregation: mean
+    higher_is_better: true
+metadata:
+  version: 1.0

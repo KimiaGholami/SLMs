@@ -1,0 +1,50 @@
+# Per-question statistics for analyze.py (CPU only).
+# Output: /output/slm-logits/stats/per_question.npz.
+#   kubectl apply -f per-question.yaml
+#   kubectl logs -f job/kimia-slm-per-question
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kimia-slm-per-question
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                - ren-gp-argo-01.madren.org   # volume reads stalled
+      containers:
+      - name: stats
+        image: python:3.11-slim
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            pip install "numpy<2" && \
+            cd /opt/repo/slms/Pipeline && \
+            python3 per_question.py --logits /output/slm-logits --out /output/slm-logits/stats --workers 6
+        volumeMounts:
+          - name: pipeline-code
+            mountPath: /opt/repo/slms/Pipeline
+          - name: plot-output
+            mountPath: /output
+        resources:
+          limits:
+            memory: 32Gi
+            cpu: "8"
+          requests:
+            memory: 32Gi
+            cpu: "8"
+      volumes:
+        - name: pipeline-code
+          configMap:
+            name: slm-pipeline
+        - name: plot-output
+          persistentVolumeClaim:
+            claimName: cache-4t-rwm

@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+# Outputs (large or unpublished): logits, statistics, figures
+*.npy
+*.npz
+stats/
+stats-*/
+figures/
